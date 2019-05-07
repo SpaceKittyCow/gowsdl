@@ -67,6 +67,9 @@ var vers = flag.Bool("v", false, "Shows gowsdl version")
 var pkg = flag.String("p", "myservice", "Package under which code will be generated")
 var outFile = flag.String("o", "myservice.go", "File where the generated code will be saved")
 var insecure = flag.Bool("i", false, "Skips TLS Verification")
+var ca = flag.String("ca", "", "Add in a certificate authority cert")
+var key = flag.String("key", "", "Add in a public key cert")
+var private = flag.String("crt", "", "Add in a private key cert")
 var makePublic = flag.Bool("make-public", true, "Make the generated types public/exported")
 
 func init() {
@@ -99,9 +102,15 @@ func main() {
 	if *outFile == wsdlPath {
 		log.Fatalln("Output file cannot be the same WSDL file")
 	}
+	config := gen.TLSConfig{
+		IgnoreTLS:     *insecure,
+		Certificate:   *private,
+		Key:           *key,
+		CaCertificate: *ca,
+	}
 
 	// load wsdl
-	gowsdl, err := gen.NewGoWSDL(wsdlPath, *pkg, *insecure, *makePublic)
+	gowsdl, err := gen.NewGoWSDL(wsdlPath, *pkg, &config, *makePublic)
 	if err != nil {
 		log.Fatalln(err)
 	}

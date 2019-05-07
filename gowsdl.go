@@ -7,6 +7,7 @@ package gowsdl
 import (
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -30,11 +31,18 @@ const maxRecursion uint8 = 20
 type GoWSDL struct {
 	loc                   *Location
 	pkg                   string
-	ignoreTLS             bool
+	TLSConfig             *TLSConfig
 	makePublicFn          func(string) string
 	wsdl                  *WSDL
 	resolvedXSDExternals  map[string]bool
 	currentRecursionLevel uint8
+}
+
+type TLSConfig struct {
+	IgnoreTLS     bool
+	Certificate   string
+	Key           string
+	CaCertificate string
 }
 
 var cacheDir = filepath.Join(os.TempDir(), "gowsdl-cache")
@@ -53,12 +61,15 @@ func dialTimeout(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, timeout)
 }
 
-func downloadFile(url string, ignoreTLS bool) ([]byte, error) {
+func downloadFile(url string, tlsconfig *TLSConfig) ([]byte, error) {
+
+	tlsclient,err := tlsconfig.generate()
+	if (err != nil) {
+		return nil, err
+	}
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: ignoreTLS,
-		},
-		Dial: dialTimeout,
+		TLSClientConfig: tlsclient,
+		Dial:            dialTimeout,
 	}
 	client := &http.Client{Transport: tr}
 
@@ -81,7 +92,7 @@ func downloadFile(url string, ignoreTLS bool) ([]byte, error) {
 }
 
 // NewGoWSDL initializes WSDL generator.
-func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool) (*GoWSDL, error) {
+func NewGoWSDL(file, pkg string, config *TLSConfig, exportAllTypes bool) (*GoWSDL, error) {
 	file = strings.TrimSpace(file)
 	if file == "" {
 		return nil, errors.New("WSDL file is required to generate Go proxy")
@@ -104,7 +115,7 @@ func NewGoWSDL(file, pkg string, ignoreTLS bool, exportAllTypes bool) (*GoWSDL, 
 	return &GoWSDL{
 		loc:          r,
 		pkg:          pkg,
-		ignoreTLS:    ignoreTLS,
+		TLSConfig:    config,
 		makePublicFn: makePublicFn,
 	}, nil
 }
@@ -164,7 +175,7 @@ func (g *GoWSDL) fetchFile(loc *Location) (data []byte, err error) {
 		data, err = ioutil.ReadFile(loc.f)
 	} else {
 		log.Println("Downloading", "file", loc.u.String())
-		data, err = downloadFile(loc.u.String(), g.ignoreTLS)
+		data, err = downloadFile(loc.u.String(), g.TLSConfig)
 	}
 	return
 }
@@ -601,3 +612,80 @@ func comment(text string) string {
 	}
 	return ""
 }
+
+func (t *TLSConfig) generate() (*tls.Config, error) {
+
+        var (
+                cert       *tls.Certificate
+                caCertPool *x509.CertPool
+                tlsConfig  *tls.Config
+        )
+
+        if t.Certificate != "" && t.Key != "" {
+                certificate, err := tls.LoadX509KeyPair(t.Certificate, t.Key)
+
+                if err != nil {
+                        return nil, err
+                }
+                cert = &certificate
+
+        }
+
+        if t.CaCertificate != "" {
+                caCert, err := ioutil.ReadFile(t.CaCertificate)
+                if err != nil {
+                        return nil, err
+                }
+                caCertPool = x509.NewCertPool()
+                caCertPool.AppendCertsFromPEM(caCert)
+        }
+
+        if caCertPool != nil && cert != nil {
+                tlsConfig = &tls.Config{
+                        Certificates:       []tls.Certificate{*cert},
+                        RootCAs:            caCertPool,
+                        InsecureSkipVerify: t.IgnoreTLS,
+                        Renegotiation:      tls.RenegotiateFreelyAsClient,
+                }
+                tlsConfig.BuildNameToCertificate()
+        } else {
+                tlsConfig = &tls.Config{
+                        InsecureSkipVerify: t.IgnoreTLS,
+                        Renegotiation:      tls.RenegotiateFreelyAsClient,
+                }
+
+        }
+        return tlsConfig, nil
+}
+
+/*func (t TLSConfig) generate() (*tls.Config, error) {
+
+	if t.certificate && t.key {
+		cert, err := tls.LoadX509KeyPair("./api-dev.pursuanthealth.com-crt.pem", "./api-dev.pursuanthealth.com-key.pem")
+		if err != nil {
+			return nil, err
+		}
+	} else if !t.certificate && !t.key  {
+
+	} else {
+		return nil, fmt.Errorf("Need both certificate and Key")
+	}
+
+	if t.caCertificate {
+		caCert, err := ioutil.ReadFile("./ph-private-root-cert.pem")
+		if err != nil {
+			return nil, err
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates:       []tls.Certificate{cert},
+		RootCAs:            caCertPool,
+		InsecureSkipVerify: t.ignoreTLS,
+	}
+
+	tlsConfig.BuildNameToCertificate()
+	return tlsConfig,nil
+}*/
