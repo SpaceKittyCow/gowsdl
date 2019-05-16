@@ -68,8 +68,8 @@ var pkg = flag.String("p", "myservice", "Package under which code will be genera
 var outFile = flag.String("o", "myservice.go", "File where the generated code will be saved")
 var insecure = flag.Bool("i", false, "Skips TLS Verification")
 var ca = flag.String("ca", "", "Add in a certificate authority cert")
-var key = flag.String("key", "", "Add in a public key cert")
-var private = flag.String("crt", "", "Add in a private key cert")
+var public = flag.String("public", "", "Add in a public key cert")
+var private = flag.String("private", "", "Add in a private key cert")
 var makePublic = flag.Bool("make-public", true, "Make the generated types public/exported")
 
 func init() {
@@ -104,8 +104,8 @@ func main() {
 	}
 	config := gen.TLSConfig{
 		IgnoreTLS:     *insecure,
-		Certificate:   *private,
-		Key:           *key,
+		Private:   *private,
+		Public:           *public,
 		CaCertificate: *ca,
 	}
 

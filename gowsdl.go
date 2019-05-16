@@ -40,8 +40,8 @@ type GoWSDL struct {
 
 type TLSConfig struct {
 	IgnoreTLS     bool
-	Certificate   string
-	Key           string
+	Private   string
+	Public           string
 	CaCertificate string
 }
 
@@ -621,8 +621,8 @@ func (t *TLSConfig) generate() (*tls.Config, error) {
                 tlsConfig  *tls.Config
         )
 
-        if t.Certificate != "" && t.Key != "" {
-                certificate, err := tls.LoadX509KeyPair(t.Certificate, t.Key)
+        if t.Private != "" && t.Public != "" {
+                certificate, err := tls.LoadX509KeyPair(t.Private, t.Public)
 
                 if err != nil {
                         return nil, err
@@ -658,34 +658,3 @@ func (t *TLSConfig) generate() (*tls.Config, error) {
         return tlsConfig, nil
 }
 
-/*func (t TLSConfig) generate() (*tls.Config, error) {
-
-	if t.certificate && t.key {
-		cert, err := tls.LoadX509KeyPair("./api-dev.pursuanthealth.com-crt.pem", "./api-dev.pursuanthealth.com-key.pem")
-		if err != nil {
-			return nil, err
-		}
-	} else if !t.certificate && !t.key  {
-
-	} else {
-		return nil, fmt.Errorf("Need both certificate and Key")
-	}
-
-	if t.caCertificate {
-		caCert, err := ioutil.ReadFile("./ph-private-root-cert.pem")
-		if err != nil {
-			return nil, err
-		}
-		caCertPool := x509.NewCertPool()
-		caCertPool.AppendCertsFromPEM(caCert)
-	}
-
-	tlsConfig := &tls.Config{
-		Certificates:       []tls.Certificate{cert},
-		RootCAs:            caCertPool,
-		InsecureSkipVerify: t.ignoreTLS,
-	}
-
-	tlsConfig.BuildNameToCertificate()
-	return tlsConfig,nil
-}*/
